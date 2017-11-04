@@ -14,14 +14,15 @@ from sklearn.model_selection import train_test_split
 
 plt.ion()   # interactive mode
 
+
 # %%
 # X_train = np.load('X_train.npy')
 # X_test = np.load('X_test.npy')
 # full_train = np.concatenate((X_train, X_test), axis=0)
 # full_mean = np.mean(full_train)
 # full_std = np.std(full_train)
-full_mean = 132.35524
-full_std = 44.076332
+full_mean = 132.35524/255
+full_std = 44.076332/255
 
 
 class FacesDataset(Dataset):
@@ -36,46 +37,36 @@ class FacesDataset(Dataset):
         return len(self.image_vectors)
 
     def __getitem__(self, idx):
-        one_dim_image = self.image_vectors[idx]
-        image = np.reshape(one_dim_image, (-1, 37))
+        one_dim_avg = self.image_vectors[idx]
+        three_dim_avg = np.repeat(one_dim_avg, 3)
+        image = np.reshape(three_dim_avg, (50, 37, 3))
 
         if self.transform:
+            image = image / 255
+            size(image)
             image = self.transform(image)
 
-        return (image, target)
+        return (image, self.targets[idx])
 
 
-# %% test the dataset class
-face_dataset = FacesDataset('X_test.npy')
-fig = plt.figure()
-
-for i in range(len(face_dataset)):
-    sample = face_dataset[i]
-    print('image number:', i)
-    ax = plt.subplot(1, 4, i+1)
-    plt.tight_layout()
-    ax.set_title('Sample #{}'.format(i))
-    ax.axis('off')
-    plt.imshow(sample(0))
-
-    if i == 3:
-        plt.show()
-        break
-
-# todo: add more transforms later
+# too: add more transforms later
 data_transforms = {
     'train': transforms.Compose([
+        transforms.Scale(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[full_mean], std=[full_std])
+        transforms.Normalize(mean=[full_mean, full_mean, full_mean],
+                             std=[full_std, full_std, full_std])
     ]),
     'val': transforms.Compose([
+        transforms.Scale(224),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[full_mean], std=[full_std])
+        transforms.Normalize(mean=[full_mean, full_mean, full_mean],
+                             std=[full_std, full_std, full_std])
     ]),
 }
 
-# %% loading the data for real
+# %% loading the raw data
 X_train_raw = np.load('X_train.npy')
 y_train_raw = np.load('y_train.npy')
 
@@ -83,10 +74,28 @@ X_train, X_val, y_train, y_val = train_test_split(X_train_raw,
                                                   y_train_raw,
                                                   random_state=1)
 
+# %% test the dataset class
+dataset_test = FacesDataset(X_train, y_train)
+fig = plt.figure()
+
+for i in range(len(dataset_test)):
+    sample, _ = dataset_test[i]
+    print('image number:', i)
+    ax = plt.subplot(1, 4, i+1)
+    plt.tight_layout()
+    ax.set_title('Sample #{}'.format(i))
+    ax.axis('off')
+    plt.imshow(sample)
+
+    if i == 3:
+        plt.show()
+        break
+
+# %% loading the data into dataloader
 faces_datasets = {
     'train': FacesDataset(X_train, y_train,
                           transform=data_transforms['train']),
-    'val': FacesDataset(X_val, y_val, transform=data_transforms['test'])
+    'val': FacesDataset(X_val, y_val, transform=data_transforms['val'])
 }
 
 dataloaders = {x: DataLoader(faces_datasets[x], batch_size=4,
@@ -94,8 +103,8 @@ dataloaders = {x: DataLoader(faces_datasets[x], batch_size=4,
                for x in ['train', 'val']}
 
 dataset_sizes = {x: len(faces_datasets[x]) for x in ['train', 'val']}
-
 use_gpu = torch.cuda.is_available()
+
 # %% model code
 
 
@@ -162,4 +171,60 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     return model
 
 
-    
+def imshow(inp, title=None):
+    """Imshow for Tensor."""
+    inp = inp.numpy().transpose((1, 2, 0))
+    mean = np.array([full_mean, full_mean, full_mean])
+    std = np.array([full_std, full_std, full_std])
+    inp = std * inp + mean
+    inp = np.clip(inp, 0, 1)
+    plt.imshow(inp)
+    if title is not None:
+        plt.title(title)
+    plt.pause(0.001)  # pause a bit so that plots are updated
+
+
+def visualize_model(model, num_images=6):
+    images_so_far = 0
+    fig = plt.figure()
+
+    for i, data in enumerate(dataloaders['val']):
+        inputs, labels = data
+        if use_gpu:
+            inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
+        else:
+            inputs, labels = Variable(inputs), Variable(labels)
+
+        outputs = model(inputs)
+        _, preds = torch.max(outputs.data, 1)
+
+        for j in range(inputs.size()[0]):
+            images_so_far += 1
+            ax = plt.subplot(num_images//2, 2, images_so_far)
+            ax.axis('off')
+            ax.set_title('predicted: {}'.format(preds[j]))
+            imshow(inputs.cpu().data[j])
+
+            if images_so_far == num_images:
+                return
+
+
+model_ft = models.resnet152(pretrained=True)
+# drop the last layer
+num_ftrs = model_ft.fc.in_features
+model_ft.fc = nn.Linear(num_ftrs, 7)
+
+criterion = nn.CrossEntropyLoss()
+
+# todo: Try adam
+optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+
+exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+
+model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                       num_epochs=25)
+
+visualize_model(model_ft)
+
+plt.ioff()
+plt.show()

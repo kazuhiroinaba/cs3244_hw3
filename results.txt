@@ -1,6 +1,7 @@
 RandomHorizontalFlip
 resnet18
-25 Epoch 
-
+25 Epoch
+resnet18_24epochs.model
 Train F1: 0.9962603072822561
 Test F1: 0.98136
+

@@ -9,8 +9,8 @@ from torchvision import datasets, models, transforms, utils
 import matplotlib.pyplot as plt
 import time
 from torch.utils.data import Dataset, DataLoader
-
 from sklearn.model_selection import train_test_split
+from PIL import Image
 
 plt.ion()   # interactive mode
 
@@ -37,16 +37,16 @@ class FacesDataset(Dataset):
         return len(self.image_vectors)
 
     def __getitem__(self, idx):
+
         one_dim_avg = self.image_vectors[idx]
-        three_dim_avg = np.repeat(one_dim_avg, 3)
-        image = np.reshape(three_dim_avg, (50, 37, 3))
+        one_dim_image = np.reshape(one_dim_avg, (50, 37)).astype('uint8')
+        im = Image.fromarray(one_dim_image)
+        imrgb = Image.merge('RGB', (im, im, im))
 
         if self.transform:
-            image = image / 255
-            size(image)
-            image = self.transform(image)
+            imrgb = self.transform(imrgb)
 
-        return (image, self.targets[idx])
+        return (imrgb, self.targets[idx])
 
 
 # too: add more transforms later
@@ -75,21 +75,6 @@ X_train, X_val, y_train, y_val = train_test_split(X_train_raw,
                                                   random_state=1)
 
 # %% test the dataset class
-dataset_test = FacesDataset(X_train, y_train)
-fig = plt.figure()
-
-for i in range(len(dataset_test)):
-    sample, _ = dataset_test[i]
-    print('image number:', i)
-    ax = plt.subplot(1, 4, i+1)
-    plt.tight_layout()
-    ax.set_title('Sample #{}'.format(i))
-    ax.axis('off')
-    plt.imshow(sample)
-
-    if i == 3:
-        plt.show()
-        break
 
 # %% loading the data into dataloader
 faces_datasets = {
@@ -107,6 +92,7 @@ use_gpu = torch.cuda.is_available()
 
 # %% model code
 
+# %%
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
@@ -210,7 +196,7 @@ def visualize_model(model, num_images=6):
 
 
 model_ft = models.resnet152(pretrained=True)
-# drop the last layer
+# swap out the last layer
 num_ftrs = model_ft.fc.in_features
 model_ft.fc = nn.Linear(num_ftrs, 7)
 
@@ -220,11 +206,12 @@ criterion = nn.CrossEntropyLoss()
 optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
 
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+# %%
+
 
 model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
                        num_epochs=25)
 
 visualize_model(model_ft)
-
 plt.ioff()
 plt.show()

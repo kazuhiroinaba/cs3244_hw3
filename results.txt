@@ -1,0 +1,6 @@
+RandomHorizontalFlip
+resnet18
+25 Epoch 
+
+Train F1: 0.9962603072822561
+Test F1: 0.98136

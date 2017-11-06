@@ -5,3 +5,9 @@ resnet18_24epochs.model
 Train F1: 0.9962603072822561
 Test F1: 0.98136
 
+RandomHorizontalFlip
+resnet34
+25 Epoch
+resnet34_25epochs.model
+Train F1: 0.9971120591113548
+Test F1: NIL

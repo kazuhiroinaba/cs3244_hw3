@@ -13,6 +13,10 @@ import types
 import collections
 import warnings
 
+'''
+Salvaged from torchvision's master branch
+'''
+
 
 def _is_pil_image(img):
     if accimage is not None:

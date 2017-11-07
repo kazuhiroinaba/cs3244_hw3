@@ -16,6 +16,10 @@ import warnings
 import functional as F
 from torchvision.transforms import Lambda, Compose
 
+'''
+Retrieved from torchvision's master branch
+'''
+
 __all__ = ["ColorJitter"]
 
 
